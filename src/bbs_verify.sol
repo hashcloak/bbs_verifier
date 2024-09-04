@@ -83,17 +83,15 @@ library Pairing {
         G1Point memory b1,
         G2Point memory b2,
         G1Point memory c1,
-        G2Point memory c2,
-        G1Point memory d1,
-        G2Point memory d2
+        G2Point memory c2
     ) internal view returns (bool) {
-        G1Point[4] memory p1 = [a1, b1, c1, d1];
-        G2Point[4] memory p2 = [a2, b2, c2, d2];
+        G1Point[3] memory p1 = [a1, b1, c1];
+        G2Point[3] memory p2 = [a2, b2, c2];
 
         uint256 inputSize = 24;
         uint256[] memory input = new uint256[](inputSize);
 
-        for (uint256 i = 0; i < 4; i++) {
+        for (uint256 i = 0; i < 3; i++) {
         uint256 j = i * 6;
         input[j + 0] = p1[i].X;
         input[j + 1] = p1[i].Y;
@@ -230,8 +228,6 @@ contract BBS_Verifier {
             b = Pairing.plus(b, Pairing.scalar_mul(BBS.generators()[i], msgScalar[i - 1]));
         }
 
-        // TODO: this pairing components are not correct
-        // test assertion should fail
-        return Pairing.pairing(sig.A, pk.PK, sig.A, BBS.BP2(), b, BBS.BP2Negate(), BBS.BP1(), BBS.BP2());
+        return Pairing.pairing(sig.A, pk.PK, Pairing.scalar_mul(sig.A, sig.E), BBS.BP2(), b, BBS.BP2Negate());
     }
 }
