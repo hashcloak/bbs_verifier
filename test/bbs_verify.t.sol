@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
 import {BBS_Verifier, Pairing, BBS} from "../src/bbs_verify.sol";
+import "forge-std/console.sol";
 
 contract BBS_VerifierTest is Test {
     BBS_Verifier.Signature public sig;
@@ -137,5 +138,8 @@ contract BBS_VerifierTest is Test {
 
         bool res2 = verifier.coreProofVerify(pk, proof, disclosed_msg, disclosed_indices);
         assert(res2);
+
+        uint256 res6 = verifier.hashToScalar("AAAgvdjhdcvewjdj", "AAA");
+        assert(res6 == 11076720365362039283643694395156825345022289342419928458447580643523526976980);
     }
 }

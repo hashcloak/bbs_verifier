@@ -115,43 +115,6 @@ library Pairing {
 
         return out[0] != 0;
     }
-
-    function pairing2(G1Point memory a1, G2Point memory a2, G1Point memory b1, G2Point memory b2)
-        internal
-        view
-        returns (bool)
-    {
-        G1Point[2] memory p1 = [a1, b1];
-        G2Point[2] memory p2 = [a2, b2];
-
-        uint256 inputSize = 12;
-        uint256[] memory input = new uint256[](inputSize);
-
-        for (uint256 i = 0; i < 2; i++) {
-            uint256 j = i * 6;
-            input[j + 0] = p1[i].X;
-            input[j + 1] = p1[i].Y;
-            input[j + 2] = p2[i].X[0];
-            input[j + 3] = p2[i].X[1];
-            input[j + 4] = p2[i].Y[0];
-            input[j + 5] = p2[i].Y[1];
-        }
-
-        uint256[1] memory out;
-        bool success;
-
-        // solium-disable-next-line security/no-inline-assembly
-        assembly {
-            success := staticcall(sub(gas(), 2000), 8, add(input, 0x20), mul(inputSize, 0x20), out, 0x20)
-            // Use "invalid" to make gas estimation work
-            switch success
-            case 0 { invalid() }
-        }
-
-        require(success, "pairing-opcode-failed");
-
-        return out[0] != 0;
-    }
 }
 
 library BBS {
@@ -330,6 +293,8 @@ library BBS {
 contract BBS_Verifier {
     uint256 constant SNARK_SCALAR_FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
     uint256 constant PRIME_Q = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
+    uint256 constant T24 = 0x1000000000000000000000000000000000000000000000000;
+    uint256 constant MASK24 = 0xffffffffffffffffffffffffffffffffffffffffffffffff;
 
     using Pairing for *;
     using BBS for *;
@@ -383,27 +348,152 @@ contract BBS_Verifier {
         return Pairing.pairing(sig.A, pk.PK, Pairing.scalar_mul(sig.A, sig.E), BBS.BP2(), b, BBS.BP2Negate());
     }
 
-    // /// This implementation is different from the one in BBS draft.
-    // // hashes the public key and generators(depending on the number of messages)
-    // function CalculateDomain(PublicKey memory pk, uint8 h_points_len) public view returns (uint256) {
-    //     require(h_points_len < 32, "invalid length");
+    function from_okm(bytes memory _msg) public view returns (uint256) {
+        uint256 z0;
+        uint256 z1;
+        uint256 a0;
 
-    //     bytes memory dom_octs;
-    //     dom_octs = abi.encodePacked(dom_octs, h_points_len);
+        assembly {
+            let p := add(_msg, 24)
+            z1 := and(mload(p), MASK24)
+            p := add(_msg, 48)
+            z0 := and(mload(p), MASK24)
+            a0 := addmod(mulmod(z1, T24, SNARK_SCALAR_FIELD), z0, SNARK_SCALAR_FIELD)
+        }
+        return a0;
+    }
 
-    //     for (uint256 i = 0; i < h_points_len + 1; i++) {
+    function expandMsgTo48(bytes memory domain, bytes memory message) public view returns (bytes memory) {
+        uint256 t1 = domain.length;
+        require(t1 < 256, "BLS: invalid domain length");
+
+        uint256 t0 = message.length;
+        bytes memory msg0 = new bytes(t1 + t0 + 64 + 4); // Buffer for the message
+        bytes memory out = new bytes(48); // Output buffer
+
+        // Create the initial message
+        // solium-disable-next-line security/no-inline-assembly
+        assembly {
+            let p := add(msg0, 96)
+
+            // Copy the message into msg0
+            let z := 0
+            for {} lt(z, t0) { z := add(z, 32) } { mstore(add(p, z), mload(add(message, add(z, 32)))) }
+            p := add(p, t0)
+
+            // Append fixed data
+            mstore8(p, 0) // zero
+            p := add(p, 1)
+            mstore8(p, 48) // 48-byte output size
+            p := add(p, 1)
+            mstore8(p, 0) // 0 byte
+            p := add(p, 1)
+
+            // Append domain length and domain
+            mstore(p, mload(add(domain, 32)))
+            p := add(p, t1)
+            mstore8(p, t1)
+        }
+
+        // Compute b0
+        bytes32 b0 = sha256(msg0);
+        bytes32 bi;
+        uint256 newLength = t1 + 34;
+
+        // Resize intermediate message
+        // solium-disable-next-line security/no-inline-assembly
+        assembly {
+            mstore(msg0, newLength)
+        }
+
+        // Compute b1
+        // solium-disable-next-line security/no-inline-assembly
+        assembly {
+            mstore(add(msg0, 32), b0)
+            mstore8(add(msg0, 64), 1)
+            mstore(add(msg0, 65), mload(add(domain, 32)))
+            mstore8(add(msg0, add(t1, 65)), t1)
+        }
+
+        bi = sha256(msg0);
+
+        // Store b1
+        // solium-disable-next-line security/no-inline-assembly
+        assembly {
+            mstore(add(out, 32), bi)
+        }
+
+        // Compute b2
+        // solium-disable-next-line security/no-inline-assembly
+        assembly {
+            let t := xor(b0, bi)
+            mstore(add(msg0, 32), t)
+            mstore8(add(msg0, 64), 2)
+            mstore(add(msg0, 65), mload(add(domain, 32)))
+            mstore8(add(msg0, add(t1, 65)), t1)
+        }
+
+        bi = sha256(msg0);
+
+        // Store b2
+        // solium-disable-next-line security/no-inline-assembly
+        assembly {
+            mstore(add(out, 64), bi)
+        }
+
+        // Compute b3
+        // solium-disable-next-line security/no-inline-assembly
+        assembly {
+            let t := xor(b0, bi)
+            mstore(add(msg0, 32), t)
+            mstore8(add(msg0, 64), 3)
+            mstore(add(msg0, 65), mload(add(domain, 32)))
+            mstore8(add(msg0, add(t1, 65)), t1)
+        }
+
+        bi = sha256(msg0);
+
+        // Store b3
+        // solium-disable-next-line security/no-inline-assembly
+        assembly {
+            mstore(add(out, 96), bi)
+        }
+
+        return out;
+    }
+
+    function hashToScalar(bytes memory msg, bytes memory dst) public view returns (uint256) {
+        bytes memory uniform_bytes = expandMsgTo48(dst, msg);
+        return from_okm(uniform_bytes);
+    }
+
+    // function calculate_domain(PublicKey memory pk, uint8 h_points_len) public view returns (uint256) {
+    //     bytes memory dom_octs = new bytes(0);
+    //     dom_octs = abi.encodePacked(dom_octs, bytes1(uint8(h_points_len)));
+
+    //     // Serialize q1
+    //     dom_octs = abi.encodePacked(dom_octs, bytes32(BBS.generators()[0].X));
+    //     dom_octs = abi.encodePacked(dom_octs, bytes32(BBS.generators()[0].Y));
+
+    //     // Serialize each h_point
+    //     for (uint256 i = 1; i < h_points_len + 1; i++) {
     //         dom_octs = abi.encodePacked(dom_octs, bytes32(BBS.generators()[i].X));
     //         dom_octs = abi.encodePacked(dom_octs, bytes32(BBS.generators()[i].Y));
     //     }
 
-    //     dom_octs = abi.encodePacked(dom_octs, bytes32(pk.PK.X[0]));
-    //     dom_octs = abi.encodePacked(dom_octs, bytes32(pk.PK.X[1]));
-    //     dom_octs = abi.encodePacked(dom_octs, bytes32(pk.PK.Y[0]));
-    //     dom_octs = abi.encodePacked(dom_octs, bytes32(pk.PK.Y[1]));
+    //     // Serialize the public key (compressed)
+    //     bytes memory compressed_pk = new bytes(0);
+    //     compressed_pk = abi.encodePacked(compressed_pk, bytes32(pk.PK.X[0]));
+    //     compressed_pk = abi.encodePacked(compressed_pk, bytes32(pk.PK.X[1]));
+    //     compressed_pk = abi.encodePacked(compressed_pk, bytes32(pk.PK.Y[0]));
+    //     compressed_pk = abi.encodePacked(compressed_pk, bytes32(pk.PK.Y[1]));
 
-    //     dom_octs = abi.encodePacked(dom_octs, bytes32(BBS.BP1().X));
+    //     bytes memory dom_input = abi.encodePacked(compressed_pk, dom_octs, bytes1(uint8(0)));
 
-    //     return uint256(keccak256(dom_octs));
+    //     // Destination string for hashing
+    //     bytes memory hashToScalarDst = abi.encodePacked("BBS_BLS12381G1_XMD:SHA-256_SSWU_RO_H2G_HM2S_", "H2S_");
+
+    //     return hashToScalar(dom_input, hashToScalarDst);
     // }
 
     function proofVerifyInit(
@@ -468,6 +558,13 @@ contract BBS_Verifier {
         uint256 challenge = 13955571932877160789381516654212174441652092085432874070047454718791062279942;
         // 6831971804760012414492655217185150406827018329771346964145455923701508846655
         require(challenge == proof.challenge, "invalid challenge");
-        return Pairing.pairing2(proof.aBar, pk.PK, proof.bBar, BBS.BP2Negate());
+        return Pairing.pairing(
+            proof.aBar,
+            pk.PK,
+            proof.bBar,
+            BBS.BP2Negate(),
+            Pairing.G1Point(0, 0),
+            Pairing.G2Point([uint256(0), uint256(0)], [uint256(0), uint256(0)])
+        );
     }
 }
