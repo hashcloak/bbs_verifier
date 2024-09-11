@@ -401,13 +401,11 @@ contract BBS_Verifier {
         uint256 newLength = t1 + 34;
 
         // Resize intermediate message
-        // solium-disable-next-line security/no-inline-assembly
         assembly {
             mstore(msg0, newLength)
         }
 
         // Compute b1
-        // solium-disable-next-line security/no-inline-assembly
         assembly {
             mstore(add(msg0, 32), b0)
             mstore8(add(msg0, 64), 1)
@@ -418,13 +416,11 @@ contract BBS_Verifier {
         bi = sha256(msg0);
 
         // Store b1
-        // solium-disable-next-line security/no-inline-assembly
         assembly {
             mstore(add(out, 32), bi)
         }
 
         // Compute b2
-        // solium-disable-next-line security/no-inline-assembly
         assembly {
             let t := xor(b0, bi)
             mstore(add(msg0, 32), t)
@@ -436,27 +432,8 @@ contract BBS_Verifier {
         bi = sha256(msg0);
 
         // Store b2
-        // solium-disable-next-line security/no-inline-assembly
         assembly {
             mstore(add(out, 64), bi)
-        }
-
-        // Compute b3
-        // solium-disable-next-line security/no-inline-assembly
-        assembly {
-            let t := xor(b0, bi)
-            mstore(add(msg0, 32), t)
-            mstore8(add(msg0, 64), 3)
-            mstore(add(msg0, 65), mload(add(domain, 32)))
-            mstore8(add(msg0, add(t1, 65)), t1)
-        }
-
-        bi = sha256(msg0);
-
-        // Store b3
-        // solium-disable-next-line security/no-inline-assembly
-        assembly {
-            mstore(add(out, 96), bi)
         }
 
         return out;
@@ -467,65 +444,48 @@ contract BBS_Verifier {
         return from_okm(uniform_bytes);
     }
 
-    // function calculate_domain(PublicKey memory pk, uint8 h_points_len) public view returns (uint256) {
-    //     bytes memory dom_octs = new bytes(0);
-    //     dom_octs = abi.encodePacked(dom_octs, bytes1(uint8(h_points_len)));
-
-    //     // Serialize q1
-    //     dom_octs = abi.encodePacked(dom_octs, bytes32(BBS.generators()[0].X));
-    //     dom_octs = abi.encodePacked(dom_octs, bytes32(BBS.generators()[0].Y));
-
-    //     // Serialize each h_point
-    //     for (uint256 i = 1; i < h_points_len + 1; i++) {
-    //         dom_octs = abi.encodePacked(dom_octs, bytes32(BBS.generators()[i].X));
-    //         dom_octs = abi.encodePacked(dom_octs, bytes32(BBS.generators()[i].Y));
-    //     }
-
-    //     // Serialize the public key (compressed)
-    //     bytes memory compressed_pk = new bytes(0);
-    //     compressed_pk = abi.encodePacked(compressed_pk, bytes32(pk.PK.X[1]));
-    //     compressed_pk = abi.encodePacked(compressed_pk, bytes32(pk.PK.X[0]));
-    //     compressed_pk = abi.encodePacked(compressed_pk, bytes32(pk.PK.Y[1]));
-    //     compressed_pk = abi.encodePacked(compressed_pk, bytes32(pk.PK.Y[0]));
-
-    //     bytes memory dom_input = abi.encodePacked(compressed_pk, dom_octs, bytes1(uint8(0)));
-
-    //     // Destination string for hashing
-    //     bytes memory hashToScalarDst = abi.encodePacked("BBS_BLS12381G1_XMD:SHA-256_SSWU_RO_H2G_HM2S_", "H2S_");
-
-    //     return hashToScalar(dom_input, hashToScalarDst);
-    // }
-
-    bytes constant api_id = abi.encodePacked("BBS_BLS12381G1_XMD:SHA-256_SSWU_RO_H2G_HM2S_");
-    bytes constant dst = abi.encodePacked("BBS_BLS12381G1_XMD:SHA-256_SSWU_RO_H2G_HM2S_H2S_");
+    bytes constant api_id = abi.encodePacked("BBS");
+    // bytes constant dst = abi.encodePacked("BBS_BLS12381G1_XMD:SHA-256_SSWU_RO_H2G_HM2S_H2S_");
 
     function calculate_domain(PublicKey memory pk, uint64 h_points_len) public view returns (uint256) {
         // Step 1: Create domain octets (add hPoints length as big-endian 8 bytes)
         bytes memory domOcts = abi.encodePacked(uint64ToBytes(h_points_len));
 
         // Step 2: Add uncompressed G1 point q1
-        domOcts = abi.encodePacked(domOcts, g1Uncompressed(BBS.generators()[0]));
+        domOcts = abi.encodePacked(domOcts, g1ToBytes(BBS.generators()[0]));
 
         // Step 3: Add each hPoint uncompressed
-        for (uint256 i = 1; i < h_points_len+1; i++) {
-            domOcts = abi.encodePacked(domOcts, g1Uncompressed(BBS.generators()[i]));
+        for (uint256 i = 1; i < h_points_len + 1; i++) {
+            domOcts = abi.encodePacked(domOcts, g1ToBytes(BBS.generators()[i]));
         }
 
         // Step 4: Add the API ID
         domOcts = abi.encodePacked(domOcts, api_id);
 
         // Step 5: Add compressed G2 public key
-        bytes memory compressedPk = abi.encodePacked(pk.PK.X[1], pk.PK.X[0], pk.PK.Y[1], pk.PK.Y[0]);
+        bytes memory x1Bytes = reverseBytes(abi.encodePacked(pk.PK.X[1]));
+        bytes memory x0Bytes = reverseBytes(abi.encodePacked(pk.PK.X[0]));
+        bytes memory y1Bytes = reverseBytes(abi.encodePacked(pk.PK.Y[1]));
+        bytes memory y0Bytes = reverseBytes(abi.encodePacked(pk.PK.Y[0]));
+        bytes memory compressedPk = abi.encodePacked(x1Bytes, x0Bytes, y1Bytes, y0Bytes);
 
         // Step 6: Create final domain input
         bytes memory domInput = abi.encodePacked(compressedPk, domOcts);
 
         // Step 7: Add header length (big-endian 8 bytes) and header
-        domInput = abi.encodePacked(domInput, uint64ToBytes(0));
-        
-        // Step 8: Perform hash-to-scalar
-        return hashToScalar(domInput, dst);
+        bytes1 zeroByte = 0x00;
+        domInput =
+            abi.encodePacked(domInput, zeroByte, zeroByte, zeroByte, zeroByte, zeroByte, zeroByte, zeroByte, zeroByte);
 
+        // bytes32 hash = sha256(domInput);
+
+        // require(domInput[2] == bytes1(uint8(176)), "BBS: Invalid signature");
+
+        //----------------------------upto above this line is same as BBS-SIG---------------------------
+
+        // Step 8: Perform hash-to-scalar
+
+        return hashToScalar(domInput, "BBSH2S_");
     }
 
     // Helper function to uncompress G1 point (returns X and Y)
@@ -542,33 +502,41 @@ contract BBS_Verifier {
         return b;
     }
 
+    function flag(uint256 y) internal pure returns (bool) {
+        if (y <= PRIME_Q - y) {
+            return true;
+        } else {
+            return false;
+        }
+    }
     // Helper function to convert G1 point to bytes
+
     function g1ToBytes(Pairing.G1Point memory point) public view returns (bytes memory) {
-        return abi.encodePacked(point.X, point.Y);
+        bytes memory xBytes = reverseBytes(abi.encodePacked(point.X));
+        bytes memory yBytes = reverseBytes(abi.encodePacked(point.Y));
+        if (!flag(point.Y)) {
+            yBytes[31] = bytes1(uint8(yBytes[31]) | uint8(1 << 7));
+        }
+        return abi.encodePacked(xBytes, yBytes);
     }
 
-    // // Helper function to convert uint256 to bytes
-    // function uintToBytes(uint256 x) public view returns (bytes memory) {
-    //     bytes memory b = new bytes(32);
-    //     assembly { mstore(add(b, 32), x) }
-    //     return b;
-    // }
+    function uintToBytes(uint256 x) public pure returns (bytes memory) {
+        bytes memory b = new bytes(32); // A uint256 is always 32 bytes
+        assembly {
+            mstore(add(b, 32), x) // Store x into the bytes array
+        }
+        return b;
+    }
 
-    // function uintToBytes8(uint64 x) internal pure returns (bytes memory) {
-    //     bytes memory b = new bytes(8);
-    //     assembly {
-    //         mstore(add(b, 8), x) // Store the 8 least significant bytes of the uint256
-    //     }
-    //     return b;
-    // }
+    function reverseBytes(bytes memory input) internal pure returns (bytes memory) {
+        bytes memory output = new bytes(32);
 
-    // function uint64ToBytesBE(uint64 value) internal pure returns (bytes8) {
-    //     bytes8 result;
-    //     assembly {
-    //         result := shl(192, value) // Shift left to place the uint64 in the most significant 8 bytes (Big Endian)
-    //     }
-    //     return result;
-    // }
+        for (uint256 i = 0; i < input.length; i++) {
+            output[i] = input[input.length - 1 - i];
+        }
+
+        return output;
+    }
 
     function proofVerifyInit(
         PublicKey memory pk,
