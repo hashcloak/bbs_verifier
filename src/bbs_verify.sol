@@ -292,7 +292,6 @@ library BBS {
 
 contract BBS_Verifier {
     uint256 constant SNARK_SCALAR_FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
-    uint256 constant PRIME_Q = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
     uint256 constant T24 = 0x1000000000000000000000000000000000000000000000000;
     uint256 constant MASK24 = 0xffffffffffffffffffffffffffffffffffffffffffffffff;
 
@@ -333,9 +332,7 @@ contract BBS_Verifier {
             require(msgScalar[i] < SNARK_SCALAR_FIELD, "invalid scalar");
         }
 
-        //TODO: change this
-        // this domain is calulated from the public key, hence cannot be hardcoded
-        uint256 domain = uint256(1657574941295262584661544995638483479511278121997613850335739962095195151826);
+        uint256 domain = calculate_domain(pk, uint64(msgScalar.length));
 
         Pairing.G1Point memory b = BBS.BP1();
 
@@ -348,7 +345,7 @@ contract BBS_Verifier {
         return Pairing.pairing(sig.A, pk.PK, Pairing.scalar_mul(sig.A, sig.E), BBS.BP2(), b, BBS.BP2Negate());
     }
 
-    function from_okm(bytes memory _msg) public view returns (uint256) {
+    function from_okm(bytes memory _msg) public pure returns (uint256) {
         uint256 z0;
         uint256 z1;
         uint256 a0;
@@ -363,7 +360,7 @@ contract BBS_Verifier {
         return a0;
     }
 
-    function expandMsgTo48(bytes memory domain, bytes memory message) public view returns (bytes memory) {
+    function expandMsgTo48(bytes memory domain, bytes memory message) public pure returns (bytes memory) {
         uint256 t1 = domain.length;
         require(t1 < 256, "BLS: invalid domain length");
 
@@ -372,7 +369,6 @@ contract BBS_Verifier {
         bytes memory out = new bytes(48); // Output buffer
 
         // Create the initial message
-        // solium-disable-next-line security/no-inline-assembly
         assembly {
             let p := add(msg0, 96)
 
@@ -389,8 +385,8 @@ contract BBS_Verifier {
             mstore8(p, 0) // 0 byte
             p := add(p, 1)
 
-            // Append domain length and domain
-            mstore(p, mload(add(domain, 32)))
+            // Append domain length and copy the full domain
+            for { let i := 0 } lt(i, t1) { i := add(i, 32) } { mstore(add(p, i), mload(add(domain, add(i, 32)))) }
             p := add(p, t1)
             mstore8(p, t1)
         }
@@ -409,8 +405,10 @@ contract BBS_Verifier {
         assembly {
             mstore(add(msg0, 32), b0)
             mstore8(add(msg0, 64), 1)
-            mstore(add(msg0, 65), mload(add(domain, 32)))
-            mstore8(add(msg0, add(t1, 65)), t1)
+            for { let i := 0 } lt(i, t1) { i := add(i, 32) } {
+                mstore(add(msg0, add(65, i)), mload(add(domain, add(i, 32))))
+            }
+            mstore8(add(msg0, add(65, t1)), t1)
         }
 
         bi = sha256(msg0);
@@ -425,8 +423,10 @@ contract BBS_Verifier {
             let t := xor(b0, bi)
             mstore(add(msg0, 32), t)
             mstore8(add(msg0, 64), 2)
-            mstore(add(msg0, 65), mload(add(domain, 32)))
-            mstore8(add(msg0, add(t1, 65)), t1)
+            for { let i := 0 } lt(i, t1) { i := add(i, 32) } {
+                mstore(add(msg0, add(65, i)), mload(add(domain, add(i, 32))))
+            }
+            mstore8(add(msg0, add(65, t1)), t1)
         }
 
         bi = sha256(msg0);
@@ -439,17 +439,17 @@ contract BBS_Verifier {
         return out;
     }
 
-    function hashToScalar(bytes memory msg, bytes memory dst) public view returns (uint256) {
-        bytes memory uniform_bytes = expandMsgTo48(dst, msg);
+    function hashToScalar(bytes memory _msg, bytes memory _dst) public pure returns (uint256) {
+        bytes memory uniform_bytes = expandMsgTo48(_dst, _msg);
         return from_okm(uniform_bytes);
     }
 
-    bytes constant api_id = abi.encodePacked("BBS");
-    // bytes constant dst = abi.encodePacked("BBS_BLS12381G1_XMD:SHA-256_SSWU_RO_H2G_HM2S_H2S_");
+    bytes constant api_id = abi.encodePacked("BBS_BLS12381G1_XMD:SHA-256_SSWU_RO_H2G_HM2S_");
+    bytes constant dst = abi.encodePacked("BBS_BLS12381G1_XMD:SHA-256_SSWU_RO_H2G_HM2S_H2S_");
 
-    function calculate_domain(PublicKey memory pk, uint64 h_points_len) public view returns (uint256) {
+    function calculate_domain(PublicKey memory pk, uint64 h_points_len) public pure returns (uint256) {
         // Step 1: Create domain octets (add hPoints length as big-endian 8 bytes)
-        bytes memory domOcts = abi.encodePacked(uint64ToBytes(h_points_len));
+        bytes memory domOcts = uint64ToBytes(h_points_len);
 
         // Step 2: Add uncompressed G1 point q1
         domOcts = abi.encodePacked(domOcts, g1ToBytes(BBS.generators()[0]));
@@ -463,10 +463,10 @@ contract BBS_Verifier {
         domOcts = abi.encodePacked(domOcts, api_id);
 
         // Step 5: Add compressed G2 public key
-        bytes memory x1Bytes = reverseBytes(abi.encodePacked(pk.PK.X[1]));
-        bytes memory x0Bytes = reverseBytes(abi.encodePacked(pk.PK.X[0]));
-        bytes memory y1Bytes = reverseBytes(abi.encodePacked(pk.PK.Y[1]));
-        bytes memory y0Bytes = reverseBytes(abi.encodePacked(pk.PK.Y[0]));
+        bytes memory x1Bytes = reverseBytes(uintToBytes(pk.PK.X[1]));
+        bytes memory x0Bytes = reverseBytes(uintToBytes(pk.PK.X[0]));
+        bytes memory y1Bytes = reverseBytes(uintToBytes(pk.PK.Y[1]));
+        bytes memory y0Bytes = reverseBytes(uintToBytes(pk.PK.Y[0]));
         bytes memory compressedPk = abi.encodePacked(x1Bytes, x0Bytes, y1Bytes, y0Bytes);
 
         // Step 6: Create final domain input
@@ -477,20 +477,8 @@ contract BBS_Verifier {
         domInput =
             abi.encodePacked(domInput, zeroByte, zeroByte, zeroByte, zeroByte, zeroByte, zeroByte, zeroByte, zeroByte);
 
-        // bytes32 hash = sha256(domInput);
-
-        // require(domInput[2] == bytes1(uint8(176)), "BBS: Invalid signature");
-
-        //----------------------------upto above this line is same as BBS-SIG---------------------------
-
         // Step 8: Perform hash-to-scalar
-
-        return hashToScalar(domInput, "BBSH2S_");
-    }
-
-    // Helper function to uncompress G1 point (returns X and Y)
-    function g1Uncompressed(Pairing.G1Point memory point) internal pure returns (bytes memory) {
-        return abi.encodePacked(point.X, point.Y);
+        return hashToScalar(domInput, dst);
     }
 
     // Helper function to convert uint64 to bytes (big-endian)
@@ -503,17 +491,17 @@ contract BBS_Verifier {
     }
 
     function flag(uint256 y) internal pure returns (bool) {
-        if (y <= PRIME_Q - y) {
+        if (y <= Pairing.PRIME_Q - y) {
             return true;
         } else {
             return false;
         }
     }
-    // Helper function to convert G1 point to bytes
 
-    function g1ToBytes(Pairing.G1Point memory point) public view returns (bytes memory) {
-        bytes memory xBytes = reverseBytes(abi.encodePacked(point.X));
-        bytes memory yBytes = reverseBytes(abi.encodePacked(point.Y));
+    // Helper function to convert G1 point to bytes
+    function g1ToBytes(Pairing.G1Point memory point) public pure returns (bytes memory) {
+        bytes memory xBytes = reverseBytes(uintToBytes(point.X));
+        bytes memory yBytes = reverseBytes(uintToBytes(point.Y));
         if (!flag(point.Y)) {
             yBytes[31] = bytes1(uint8(yBytes[31]) | uint8(1 << 7));
         }
