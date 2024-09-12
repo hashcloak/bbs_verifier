@@ -331,6 +331,9 @@ contract BBS_Verifier {
         for (uint256 i = 0; i < msgScalar.length; i++) {
             require(msgScalar[i] < SNARK_SCALAR_FIELD, "invalid scalar");
         }
+        require(sig.E != 0, "invalid signature");
+        require(sig.A.X != 0 || sig.A.Y != 0, "invalid signature");
+        require(pk.PK.X[0] != 0 || pk.PK.X[1] != 0 || pk.PK.Y[0] != 0 || pk.PK.Y[1] != 0, "invalid public key");
 
         uint256 domain = calculate_domain(pk, uint64(msgScalar.length));
 
