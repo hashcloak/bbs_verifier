@@ -74,3 +74,11 @@ contract BBS_VerifierTest is Test {
         assert(res);
     }
 }
+
+contract hashToCurve is Test {
+    function test_hashToCurve()  public view {
+        uint256[2] memory res = Pairing.hashToPoint("test", "dst");
+        assert(res[0] == 10472396393457522110739541980397225556792798958301527074801346528072569881668);
+        assert(res[1] == 10229586341858072052103789266835573936791353000004787370356716111864191751005);
+    }
+}
