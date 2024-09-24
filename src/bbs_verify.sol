@@ -343,7 +343,7 @@ library Pairing {
     /// @notice sqrt(xx) mod N
     /// @param xx Input
     function sqrt(uint256 xx) internal view returns (uint256 x, bool hasRoot) {
-        x = expMod(xx, (PRIME_Q - 1) / 2, PRIME_Q);
+        x = expMod(xx, (PRIME_Q + 1) / 4, PRIME_Q);
         hasRoot = mulmod(x, x, PRIME_Q) == xx;
     }
 
@@ -387,14 +387,15 @@ library Pairing {
             p := add(p, 32)
             mstore(p, PRIME_Q) // N
 
-            success := staticcall(
-                gas(),
-                5,
-                add(input, 32),
-                192,
-                0x00, // scratch space <- result
-                32
-            )
+            success :=
+                staticcall(
+                    gas(),
+                    5,
+                    add(input, 32),
+                    192,
+                    0x00, // scratch space <- result
+                    32
+                )
             output := mload(0x00) // output <- result
         }
         require(success, "modexp-legendre-failed");
@@ -404,38 +405,20 @@ library Pairing {
         return expMod(a, PRIME_Q - 2, PRIME_Q);
     }
 
-    function expMod(uint256 base, uint256 exponent, uint256 modulus) internal view returns (uint256 result) {
-        // Ensure modulus is not zero (avoid division by zero error)
-        require(modulus != 0, "Modulus cannot be zero");
-
-        // Prepare input for the precompile (base, exponent, modulus)
-        uint256[6] memory input;
-        input[0] = 32;
-        input[1] = 32;
-        input[2] = 32;
-        input[3] = base;
-        input[4] = exponent;
-        input[5] = modulus;
-
-        // Call the precompiled contract using staticcall
+    function expMod(uint256 base, uint256 expo, uint256 modn) internal view returns (uint256 result) {
         bool success;
         assembly {
-            // Call the precompiled contract at address 0x05 with the input
-            success :=
-                staticcall(
-                    sub(gas(), 2000), // Gas limit
-                    0x05, // Address of precompile (0x05)
-                    add(input, 0x20), // Input data pointer (skip length prefix)
-                    mload(input), // Input data length
-                    add(result, 0x20), // Output data pointer (skip length prefix)
-                    0x20 // Output data length (32 bytes for uint256)
-                )
+            let freemem := mload(0x40)
+            mstore(freemem, 0x20) // Length of base
+            mstore(add(freemem, 0x20), 0x20) // Length of exponent
+            mstore(add(freemem, 0x40), 0x20) // Length of modulus
+            mstore(add(freemem, 0x60), base) // Base
+            mstore(add(freemem, 0x80), expo) // Exponent
+            mstore(add(freemem, 0xa0), modn) // Modulus
+            success := staticcall(sub(gas(), 2000), 0x05, freemem, 0xc0, freemem, 0x20)
+            result := mload(freemem)
         }
-
-        // Ensure the call was successful
-        require(success, "expMod staticcall failed");
-
-        result;
+        require(success, "Modular exponentiation failed");
     }
 }
 
@@ -758,7 +741,6 @@ contract BBS_Verifier {
     function hashToG1(bytes memory _msg, bytes memory _dst) public view returns (Pairing.G1Point memory) {
         uint256[2] memory res = Pairing.hashToPoint(_msg, _dst);
 
-        return Pairing.G1Point(res[0],res[1]);
-        
+        return Pairing.G1Point(res[0], res[1]);
     }
 }

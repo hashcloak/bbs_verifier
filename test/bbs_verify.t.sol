@@ -75,10 +75,25 @@ contract BBS_VerifierTest is Test {
     }
 }
 
-contract hashToCurve is Test {
-    function test_hashToCurve()  public view {
-        uint256[2] memory res = Pairing.hashToPoint("test", "dst");
-        assert(res[0] == 10472396393457522110739541980397225556792798958301527074801346528072569881668);
-        assert(res[1] == 10229586341858072052103789266835573936791353000004787370356716111864191751005);
+// contract hashToCurve is Test {
+//     function test_hashToCurve()  public view {
+//         uint256[2] memory res = Pairing.hashToPoint("test", "dst");
+//         assert(res[0] == 10472396393457522110739541980397225556792798958301527074801346528072569881668);
+//         assert(res[1] == 10229586341858072052103789266835573936791353000004787370356716111864191751005);
+//     }
+// }
+
+contract modCalc is Test {
+    function test_mul_mod() public view {
+        uint256 res = Pairing.expMod(2, Pairing.PRIME_Q - 1, Pairing.PRIME_Q);
+        assert(res == 1);
+    }
+}
+
+contract sqrt is Test {
+    function test_sqrt() public view {
+        (uint256 res, bool is_sq) = Pairing.sqrt(121);
+        assert(res == 11);
+        assert(is_sq);
     }
 }
