@@ -76,8 +76,9 @@ contract BBS_VerifierTest is Test {
 }
 
 contract hashToCurve is Test {
-    function test_hashToCurve()  public view {
-        uint256[2] memory res = Pairing.hashToPoint("BBS_QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_H2G_HM2S_H2S_", "test");
+    function test_hashToCurve() public view {
+        uint256[2] memory res =
+            Pairing.hashToPoint("BBS_QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_H2G_HM2S_H2S_", "test");
         assert(res[0] == 4687667048072360499873766344051941265352748409069863031676580675735231660684);
         assert(res[1] == 470394146867402188632129722940165669297151995446560861816035625371464676675);
     }

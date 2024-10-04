@@ -743,4 +743,74 @@ contract BBS_Verifier {
 
         return Pairing.G1Point(res[0], res[1]);
     }
+
+    // function proofVerify(PublicKey memory pk, Proof memory proof, uint256[] memory disclosedMsg, uint8[] memory disclosedIndices) public view returns (bool) {
+
+    //     uint msgLen = disclosedMsg.length;
+    //     uint commitmentLen = proof.commitments.length;
+    //     uint len = msgLen + commitmentLen;
+
+    // }
+
+    function proofVerifyInit(
+        PublicKey memory pk,
+        Proof memory proof,
+        uint256[] memory disclosedMsg,
+        uint8[] memory disclosedIndices
+    ) public view returns (InitProof memory) {
+        uint256 u = proof.commitments.length;
+        uint256 r = disclosedIndices.length;
+        uint256 l = u + r;
+
+        uint8[] memory undisclosedIndices = complement(uint8(u), uint8(r), disclosedIndices);
+        uint256 domain = calculate_domain(pk, uint64(l + 1));
+        Pairing.G1Point memory t1 = Pairing.scalar_mul(proof.bBar, proof.challenge);
+        Pairing.G1Point memory t11 = Pairing.scalar_mul(proof.aBar, proof.eCap);
+        Pairing.G1Point memory t12 = Pairing.scalar_mul(proof.d, proof.r1Cap);
+        t1 = Pairing.plus(t1, t11);
+        t1 = Pairing.plus(t1, t12);
+
+        Pairing.G1Point memory bv1 = Pairing.scalar_mul(BBS.generators()[0], domain);
+        Pairing.G1Point memory bv = Pairing.plus(BBS.BP1(), bv1);
+
+        for (uint256 i = 1; i < disclosedIndices.length; i++) {
+            uint8 disclosedIndex = disclosedIndices[i] + 1;
+            uint256 disclosedm = disclosedMsg[i - 1];
+            Pairing.G1Point memory t = Pairing.scalar_mul(BBS.generators()[disclosedIndex], disclosedm);
+            bv = Pairing.plus(bv, t);
+        }
+        uint256 challenge = proof.challenge;
+        Pairing.G1Point memory d = proof.d;
+        uint256 r3Cap = proof.r3Cap;
+        Pairing.G1Point memory t21 = Pairing.scalar_mul(bv, challenge);
+        Pairing.G1Point memory t22 = Pairing.scalar_mul(d, r3Cap);
+        Pairing.G1Point memory t2 = Pairing.plus(t21, t22);
+
+        for (uint256 i = 0; i < u; i++) {
+            t2 = Pairing.plus(t2, Pairing.scalar_mul(BBS.generators()[undisclosedIndices[i] + 1], proof.commitments[i]));
+        }
+
+        return InitProof([proof.aBar, proof.bBar, proof.d, t1, t2], domain);
+    }
+
+    function complement(uint8 u, uint8 r, uint8[] memory set) public pure returns (uint8[] memory) {
+        // Step 1: Create a boolean array to mark the presence of elements in the set
+        bool[] memory isPresent = new bool[](u + r);
+
+        // Step 2: Mark the elements present in the provided set
+        for (uint256 i = 0; i < set.length; i++) {
+            isPresent[set[i]] = true;
+        }
+
+        uint8[] memory complementSet = new uint8[](u);
+        uint256 index = 0;
+        for (uint8 i = 0; i < u + r; i++) {
+            if (!isPresent[i]) {
+                complementSet[index] = i;
+                index++;
+            }
+        }
+
+        return complementSet;
+    }
 }
