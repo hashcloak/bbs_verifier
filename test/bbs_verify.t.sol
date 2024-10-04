@@ -75,13 +75,13 @@ contract BBS_VerifierTest is Test {
     }
 }
 
-// contract hashToCurve is Test {
-//     function test_hashToCurve()  public view {
-//         uint256[2] memory res = Pairing.hashToPoint("test", "dst");
-//         assert(res[0] == 10472396393457522110739541980397225556792798958301527074801346528072569881668);
-//         assert(res[1] == 10229586341858072052103789266835573936791353000004787370356716111864191751005);
-//     }
-// }
+contract hashToCurve is Test {
+    function test_hashToCurve()  public view {
+        uint256[2] memory res = Pairing.hashToPoint("BBS_QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_H2G_HM2S_H2S_", "test");
+        assert(res[0] == 4687667048072360499873766344051941265352748409069863031676580675735231660684);
+        assert(res[1] == 470394146867402188632129722940165669297151995446560861816035625371464676675);
+    }
+}
 
 contract modCalc is Test {
     function test_mul_mod() public view {
