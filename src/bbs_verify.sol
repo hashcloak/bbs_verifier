@@ -763,7 +763,7 @@ contract BBS_Verifier {
         uint256 l = u + r;
 
         uint8[] memory undisclosedIndices = complement(uint8(u), uint8(r), disclosedIndices);
-        uint256 domain = calculate_domain(pk, uint64(l + 1));
+        uint256 domain = calculate_domain(pk, uint64(l));
         Pairing.G1Point memory t1 = Pairing.scalar_mul(proof.bBar, proof.challenge);
         Pairing.G1Point memory t11 = Pairing.scalar_mul(proof.aBar, proof.eCap);
         Pairing.G1Point memory t12 = Pairing.scalar_mul(proof.d, proof.r1Cap);
@@ -773,9 +773,9 @@ contract BBS_Verifier {
         Pairing.G1Point memory bv1 = Pairing.scalar_mul(BBS.generators()[0], domain);
         Pairing.G1Point memory bv = Pairing.plus(BBS.BP1(), bv1);
 
-        for (uint256 i = 1; i < disclosedIndices.length; i++) {
+        for (uint256 i = 0; i < disclosedIndices.length; i++) {
             uint8 disclosedIndex = disclosedIndices[i] + 1;
-            uint256 disclosedm = disclosedMsg[i - 1];
+            uint256 disclosedm = disclosedMsg[i];
             Pairing.G1Point memory t = Pairing.scalar_mul(BBS.generators()[disclosedIndex], disclosedm);
             bv = Pairing.plus(bv, t);
         }
