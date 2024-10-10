@@ -9,6 +9,9 @@ contract BBS_VerifierTest is Test {
     BBS_Verifier.PublicKey public pk;
     BBS_Verifier.Proof public proof;
     uint256[] public msgScalar;
+    uint256[] public disclosed_msg = new uint256[](3);
+    uint8[] public disclosed_indices = new uint8[](3);
+    BBS_Verifier.InitProof public initProof;
 
     function setUp() public {
         // msg
@@ -111,6 +114,36 @@ contract BBS_VerifierTest is Test {
         proof.commitments[25] = uint256(4689669766214571146361709842956272925578589085257066757670840626355289827344);
         proof.commitments[26] = uint256(19717012933748023731747259246552232456988022985282562051094427191782572854304);
         proof.commitments[27] = uint256(19403246504848923420955727303103540860884754495247099508968984133479080201474);
+
+        disclosed_msg[0] = 2266124219189018131;
+        disclosed_msg[1] = 15553430782966677989;
+        disclosed_msg[2] = 4743228516788447402;
+
+        disclosed_indices[0] = 0;
+        disclosed_indices[1] = 1;
+        disclosed_indices[2] = 5;
+
+        initProof.points[0] = Pairing.G1Point(
+            uint256(17705900040482640200318765868397816899423300068827258330107828571873441470719),
+            uint256(7713906401864379473036154127800301923576930562959621253303600800199073334118)
+        );
+        initProof.points[1] = Pairing.G1Point(
+            uint256(21727344193746663605105815693486793700736011477614477583899999224491814279994),
+            uint256(3107868243865832229708730395440182823160504417487161073020576660932813536129)
+        );
+        initProof.points[2] = Pairing.G1Point(
+            uint256(15259877521667048732653966731531866330870155623999372073511953831671978329220),
+            uint256(10346279138881905705140583326619164208036592391424952436660826945178815367429)
+        );
+        initProof.points[3] = Pairing.G1Point(
+            uint256(9450541227839351281812164523351865265510569098677555890572077252104786626690),
+            uint256(9197258858130081208441965628507147760561818479091872534935021928583764617680)
+        );
+        initProof.points[4] = Pairing.G1Point(
+            uint256(5816804290213296793101908964222774752394739247046217083058295650122051844227),
+            uint256(1590091680226237410825658942611263221992039739303345139797440692938537664171)
+        );
+        initProof.scalar = uint256(4661402122534330745222086575742781481159552639583525480514127238648290568236);
     }
 
     function test_verify() public {
@@ -124,41 +157,9 @@ contract BBS_VerifierTest is Test {
     function test_proof_verify_init() public {
         BBS_Verifier verifier;
         verifier = new BBS_Verifier();
-        uint256[] memory disclosed_msg = new uint256[](3);
-        disclosed_msg[0] = 2266124219189018131;
-        disclosed_msg[1] = 15553430782966677989;
-        disclosed_msg[2] = 4743228516788447402;
-
-        uint8[] memory disclosed_indices = new uint8[](3);
-        disclosed_indices[0] = 0;
-        disclosed_indices[1] = 1;
-        disclosed_indices[2] = 5;
-
-        BBS_Verifier.InitProof memory initProof;
-        initProof.points[0] = Pairing.G1Point(
-            uint256(17705900040482640200318765868397816899423300068827258330107828571873441470719),
-            uint256(7713906401864379473036154127800301923576930562959621253303600800199073334118)
-        );
-        initProof.points[1] = Pairing.G1Point(
-            uint256(21727344193746663605105815693486793700736011477614477583899999224491814279994),
-            uint256(3107868243865832229708730395440182823160504417487161073020576660932813536129)
-        );
-        initProof.points[2] = Pairing.G1Point(
-            uint256(15259877521667048732653966731531866330870155623999372073511953831671978329220),
-            uint256(10346279138881905705140583326619164208036592391424952436660826945178815367429)
-        );
-        initProof.points[3] = Pairing.G1Point(
-            uint256(9450541227839351281812164523351865265510569098677555890572077252104786626690),
-            uint256(9197258858130081208441965628507147760561818479091872534935021928583764617680)
-        );
-        initProof.points[4] = Pairing.G1Point(
-            uint256(5816804290213296793101908964222774752394739247046217083058295650122051844227),
-            uint256(1590091680226237410825658942611263221992039739303345139797440692938537664171)
-        );
-        initProof.scalar = uint256(4661402122534330745222086575742781481159552639583525480514127238648290568236);
-
         BBS_Verifier.InitProof memory init_output =
             verifier.proofVerifyInit(pk, proof, disclosed_msg, disclosed_indices);
+
         assert(initProof.scalar == init_output.scalar);
         assert(initProof.points[3].X == init_output.points[3].X);
         assert(initProof.points[3].Y == init_output.points[3].Y);
@@ -169,42 +170,16 @@ contract BBS_VerifierTest is Test {
     function testProofChallengeCalculate() public {
         BBS_Verifier verifier;
         verifier = new BBS_Verifier();
-        uint256[] memory disclosed_msg = new uint256[](3);
-        disclosed_msg[0] = 2266124219189018131;
-        disclosed_msg[1] = 15553430782966677989;
-        disclosed_msg[2] = 4743228516788447402;
-
-        uint8[] memory disclosed_indices = new uint8[](3);
-        disclosed_indices[0] = 0;
-        disclosed_indices[1] = 1;
-        disclosed_indices[2] = 5;
-
-        BBS_Verifier.InitProof memory initProof;
-        initProof.points[0] = Pairing.G1Point(
-            uint256(17705900040482640200318765868397816899423300068827258330107828571873441470719),
-            uint256(7713906401864379473036154127800301923576930562959621253303600800199073334118)
-        );
-        initProof.points[1] = Pairing.G1Point(
-            uint256(21727344193746663605105815693486793700736011477614477583899999224491814279994),
-            uint256(3107868243865832229708730395440182823160504417487161073020576660932813536129)
-        );
-        initProof.points[2] = Pairing.G1Point(
-            uint256(15259877521667048732653966731531866330870155623999372073511953831671978329220),
-            uint256(10346279138881905705140583326619164208036592391424952436660826945178815367429)
-        );
-        initProof.points[3] = Pairing.G1Point(
-            uint256(9450541227839351281812164523351865265510569098677555890572077252104786626690),
-            uint256(9197258858130081208441965628507147760561818479091872534935021928583764617680)
-        );
-        initProof.points[4] = Pairing.G1Point(
-            uint256(5816804290213296793101908964222774752394739247046217083058295650122051844227),
-            uint256(1590091680226237410825658942611263221992039739303345139797440692938537664171)
-        );
-        initProof.scalar = uint256(4661402122534330745222086575742781481159552639583525480514127238648290568236);
-
         uint256 challenge = verifier.proofChallengeCalculate(initProof, disclosed_msg, disclosed_indices);
 
         assert(challenge == uint256(17070931957668459394149291496811547077907740596908548642717845173554837520766));
+    }
+
+    function testProofVerify() public {
+        BBS_Verifier verifier;
+        verifier = new BBS_Verifier();
+        bool res = verifier.proofVerify(pk, proof, disclosed_msg, disclosed_indices);
+        assert(res);
     }
 }
 
@@ -214,20 +189,5 @@ contract hashToCurve is Test {
             Pairing.hashToPoint("BBS_QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_H2G_HM2S_H2S_", "test");
         assert(res[0] == 4687667048072360499873766344051941265352748409069863031676580675735231660684);
         assert(res[1] == 470394146867402188632129722940165669297151995446560861816035625371464676675);
-    }
-}
-
-contract modCalc is Test {
-    function test_mul_mod() public view {
-        uint256 res = Pairing.expMod(2, Pairing.PRIME_Q - 1, Pairing.PRIME_Q);
-        assert(res == 1);
-    }
-}
-
-contract sqrt is Test {
-    function test_sqrt() public view {
-        (uint256 res, bool is_sq) = Pairing.sqrt(121);
-        assert(res == 11);
-        assert(is_sq);
     }
 }

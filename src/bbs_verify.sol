@@ -744,13 +744,25 @@ contract BBS_Verifier {
         return Pairing.G1Point(res[0], res[1]);
     }
 
-    // function proofVerify(PublicKey memory pk, Proof memory proof, uint256[] memory disclosedMsg, uint8[] memory disclosedIndices) public view returns (bool) {
+    function proofVerify(
+        PublicKey memory pk,
+        Proof memory proof,
+        uint256[] memory disclosedMsg,
+        uint8[] memory disclosedIndices
+    ) public view returns (bool) {
+        InitProof memory initProof = proofVerifyInit(pk, proof, disclosedMsg, disclosedIndices);
+        uint256 challenge = proofChallengeCalculate(initProof, disclosedMsg, disclosedIndices);
 
-    //     uint msgLen = disclosedMsg.length;
-    //     uint commitmentLen = proof.commitments.length;
-    //     uint len = msgLen + commitmentLen;
-
-    // }
+        require(challenge == proof.challenge, "invalid challenge");
+        return Pairing.pairing(
+            proof.aBar,
+            pk.PK,
+            proof.bBar,
+            BBS.BP2Negate(),
+            Pairing.G1Point(0, 0),
+            Pairing.G2Point([uint256(0), uint256(0)], [uint256(0), uint256(0)])
+        );
+    }
 
     function proofVerifyInit(
         PublicKey memory pk,
