@@ -813,4 +813,31 @@ contract BBS_Verifier {
 
         return complementSet;
     }
+
+    function proofChallengeCalculate(
+        InitProof memory initProof,
+        uint256[] memory disclosedMsg,
+        uint8[] memory disclosedIndices
+    ) public view returns (uint256) {
+        require(disclosedMsg.length == disclosedIndices.length, "invalid length");
+
+        bytes memory serializeBytes = uint64ToBytes(disclosedIndices.length);
+
+        for (uint256 i = 0; i < disclosedMsg.length; i++) {
+            serializeBytes = abi.encodePacked(serializeBytes, uint64ToBytes(uint64(disclosedIndices[i])));
+            serializeBytes = abi.encodePacked(serializeBytes, reverseBytes(uintToBytes(disclosedMsg[i])));
+        }
+
+        for (uint256 i = 0; i < initProof.points.length; i++) {
+            serializeBytes = abi.encodePacked(serializeBytes, g1ToBytes(initProof.points[i]));
+        }
+        serializeBytes = abi.encodePacked(serializeBytes, reverseBytes(uintToBytes(initProof.scalar)));
+
+        bytes1 zeroByte = 0x00;
+        serializeBytes = abi.encodePacked(
+            serializeBytes, zeroByte, zeroByte, zeroByte, zeroByte, zeroByte, zeroByte, zeroByte, zeroByte
+        );
+
+        return BBS.hashToScalar(serializeBytes, dst);
+    }
 }
