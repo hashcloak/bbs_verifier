@@ -7,21 +7,6 @@ library Pairing {
     uint256 constant SNARK_SCALAR_FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
     uint256 constant T24 = 0x1000000000000000000000000000000000000000000000000;
     uint256 constant MASK24 = 0xffffffffffffffffffffffffffffffffffffffffffffffff;
-    uint256 private constant A = 0;
-    uint256 private constant B = 3;
-    /// @notice Param Z for SVDW over E
-    uint256 private constant Z = 1;
-    /// @notice g(Z) where g(x) = x^3 + 3
-    uint256 private constant C1 = 0x4;
-    /// @notice -Z / 2 (mod N)
-    uint256 private constant C2 = 0x183227397098d014dc2822db40c0ac2ecbc0b548b438e5469e10460b6c3e7ea3;
-    /// @notice C3 = sqrt(-g(Z) * (3 * Z^2 + 4 * A)) (mod N)
-    ///     and sgn0(C3) == 0
-    uint256 private constant C3 = 0x16789af3a83522eb353c98fc6b36d713d5d8d1cc5dffffffa;
-    /// @notice 4 * -g(Z) / (3 * Z^2 + 4 * A) (mod N)
-    uint256 private constant C4 = 0x10216f7ba065e00de81ac1e7808072c9dd2b2385cd7b438469602eb24829a9bd;
-    /// @notice (N - 1) / 2
-    uint256 private constant C5 = 0x183227397098d014dc2822db40c0ac2ecbc0b548b438e5469e10460b6c3e7ea3;
 
     struct G1Point {
         uint256 X;
@@ -156,6 +141,7 @@ library Pairing {
         pure
         returns (bytes memory)
     {
+        require(len_in_bytes == 48 || len_in_bytes == 96, "BLS: invalid length");
         uint256 t1 = domain.length;
         require(t1 < 256, "BLS: invalid domain length");
 
@@ -251,174 +237,6 @@ library Pairing {
             }
         }
         return out;
-    }
-
-    /// @notice Hash to BN254 G1
-    /// @param domain Domain separation tag
-    /// @param message Message to hash
-    /// @return Point in G1
-    function hashToPoint(bytes memory domain, bytes memory message) public view returns (uint256[2] memory) {
-        uint256[2] memory u = hashToField(domain, message);
-        uint256[2] memory p0 = mapToPoint(u[0]);
-        uint256[2] memory p1 = mapToPoint(u[1]);
-        uint256[4] memory bnAddInput;
-        bnAddInput[0] = p0[0];
-        bnAddInput[1] = p0[1];
-        bnAddInput[2] = p1[0];
-        bnAddInput[3] = p1[1];
-        bool success;
-        // solium-disable-next-line security/no-inline-assembly
-        assembly {
-            success := staticcall(sub(gas(), 2000), 6, bnAddInput, 128, p0, 64)
-        }
-        require(success, "BN Add failed");
-        return p0;
-    }
-
-    /// @notice Hash a message to the field
-    /// @param domain Domain separation tag
-    /// @param message Message to hash
-    function hashToField(bytes memory domain, bytes memory message) internal pure returns (uint256[2] memory) {
-        bytes memory _msg = expandMsg(domain, message, 96);
-        uint256 u0;
-        uint256 u1;
-        uint256 a0;
-        uint256 a1;
-        // solium-disable-next-line security/no-inline-assembly
-        assembly {
-            let p := add(_msg, 24)
-            u1 := and(mload(p), MASK24)
-            p := add(_msg, 48)
-            u0 := and(mload(p), MASK24)
-            a0 := addmod(mulmod(u1, T24, PRIME_Q), u0, PRIME_Q)
-            p := add(_msg, 72)
-            u1 := and(mload(p), MASK24)
-            p := add(_msg, 96)
-            u0 := and(mload(p), MASK24)
-            a1 := addmod(mulmod(u1, T24, PRIME_Q), u0, PRIME_Q)
-        }
-        return [a0, a1];
-    }
-
-    /// @notice Map field element to E using SvdW
-    /// @param u Field element to map
-    /// @return p Point on curve
-    function mapToPoint(uint256 u) internal view returns (uint256[2] memory p) {
-        require(u < PRIME_Q, "invalid u");
-
-        uint256 tv1 = mulmod(mulmod(u, u, PRIME_Q), C1, PRIME_Q);
-        uint256 tv2 = addmod(1, tv1, PRIME_Q);
-        tv1 = addmod(1, PRIME_Q - tv1, PRIME_Q);
-        uint256 tv3 = inverse(mulmod(tv1, tv2, PRIME_Q));
-        uint256 tv5 = mulmod(mulmod(mulmod(u, tv1, PRIME_Q), tv3, PRIME_Q), C3, PRIME_Q);
-        uint256 x1 = addmod(C2, PRIME_Q - tv5, PRIME_Q);
-        uint256 x2 = addmod(C2, tv5, PRIME_Q);
-        uint256 tv7 = mulmod(tv2, tv2, PRIME_Q);
-        uint256 tv8 = mulmod(tv7, tv3, PRIME_Q);
-        uint256 x3 = addmod(Z, mulmod(C4, mulmod(tv8, tv8, PRIME_Q), PRIME_Q), PRIME_Q);
-
-        bool hasRoot;
-        uint256 gx;
-        if (legendre(g(x1)) == 1) {
-            p[0] = x1;
-            gx = g(x1);
-            (p[1], hasRoot) = sqrt(gx);
-            require(hasRoot, "root not found");
-        } else if (legendre(g(x2)) == 1) {
-            p[0] = x2;
-            gx = g(x2);
-            (p[1], hasRoot) = sqrt(gx);
-            require(hasRoot, "root not found");
-        } else {
-            p[0] = x3;
-            gx = g(x3);
-            (p[1], hasRoot) = sqrt(gx);
-            require(hasRoot, "root not found");
-        }
-        if (sgn0(u) != sgn0(p[1])) {
-            p[1] = PRIME_Q - p[1];
-        }
-    }
-
-    /// @notice sqrt(xx) mod N
-    /// @param xx Input
-    function sqrt(uint256 xx) internal view returns (uint256 x, bool hasRoot) {
-        x = expMod(xx, (PRIME_Q + 1) / 4, PRIME_Q);
-        hasRoot = mulmod(x, x, PRIME_Q) == xx;
-    }
-
-    /// @notice g(x) = y^2 = x^3 + 3
-    function g(uint256 x) private pure returns (uint256) {
-        return addmod(mulmod(mulmod(x, x, PRIME_Q), x, PRIME_Q), B, PRIME_Q);
-    }
-
-    /// @notice https://datatracker.ietf.org/doc/html/rfc9380#name-the-sgn0-function
-    function sgn0(uint256 x) private pure returns (uint256) {
-        return x % 2;
-    }
-
-    /// @notice Compute Legendre symbol of u
-    /// @param u Field element
-    /// @return 1 if u is a quadratic residue, -1 if not, or 0 if u = 0 (mod p)
-    function legendre(uint256 u) private view returns (int8) {
-        uint256 x = modexpLegendre(u);
-        if (x == PRIME_Q - 1) {
-            return -1;
-        }
-        require(x == 0 || x == 1, "invalid Legendre symbol");
-        return int8(int256(x));
-    }
-
-    /// @notice This is cheaper than an addchain for exponent (N-1)/2
-    function modexpLegendre(uint256 u) private view returns (uint256 output) {
-        bytes memory input = new bytes(192);
-        bool success;
-        assembly {
-            let p := add(input, 32)
-            mstore(p, 32) // len(u)
-            p := add(p, 32)
-            mstore(p, 32) // len(exp)
-            p := add(p, 32)
-            mstore(p, 32) // len(mod)
-            p := add(p, 32)
-            mstore(p, u) // u
-            p := add(p, 32)
-            mstore(p, C5) // (N-1)/2
-            p := add(p, 32)
-            mstore(p, PRIME_Q) // N
-
-            success :=
-                staticcall(
-                    gas(),
-                    5,
-                    add(input, 32),
-                    192,
-                    0x00, // scratch space <- result
-                    32
-                )
-            output := mload(0x00) // output <- result
-        }
-        require(success, "modexp-legendre-failed");
-    }
-
-    function inverse(uint256 a) internal view returns (uint256) {
-        return expMod(a, PRIME_Q - 2, PRIME_Q);
-    }
-
-    function expMod(uint256 base, uint256 expo, uint256 modn) internal view returns (uint256 result) {
-        bool success;
-        assembly {
-            let freemem := mload(0x40)
-            mstore(freemem, 0x20) // Length of base
-            mstore(add(freemem, 0x20), 0x20) // Length of exponent
-            mstore(add(freemem, 0x40), 0x20) // Length of modulus
-            mstore(add(freemem, 0x60), base) // Base
-            mstore(add(freemem, 0x80), expo) // Exponent
-            mstore(add(freemem, 0xa0), modn) // Modulus
-            success := staticcall(sub(gas(), 2000), 0x05, freemem, 0xc0, freemem, 0x20)
-            result := mload(freemem)
-        }
-        require(success, "Modular exponentiation failed");
     }
 }
 
@@ -656,8 +474,8 @@ contract BBS_Verifier {
 
     // api_id = ciphersuite_id || "H2G_HM2S_"
     // CIPHERSUITE_ID: &[u8] = b"BBS_QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_"
-    bytes constant api_id = abi.encodePacked("BBS_QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_H2G_HM2S_");
-    bytes constant dst = abi.encodePacked("BBS_QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_H2G_HM2S_H2S_");
+    bytes constant api_id = "BBS_QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_H2G_HM2S_";
+    bytes constant dst = "BBS_QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_H2G_HM2S_H2S_";
 
     function calculate_domain(PublicKey memory pk, uint64 h_points_len) public pure returns (uint256) {
         // Step 1: Create domain octets (add hPoints length as big-endian 8 bytes)
@@ -695,11 +513,12 @@ contract BBS_Verifier {
 
     // Helper function to convert uint64 to bytes (big-endian)
     function uint64ToBytes(uint256 x) internal pure returns (bytes memory) {
-        bytes memory b = new bytes(8);
-        for (uint256 i = 0; i < 8; i++) {
-            b[7 - i] = bytes1(uint8(x >> (i * 8)));
+        bytes memory result = new bytes(8); // uint64 takes 8 bytes
+        assembly {
+            let resultPtr := add(result, 32)
+            mstore(resultPtr, shl(192, x))
         }
-        return b;
+        return result;
     }
 
     function flag(uint256 y) internal pure returns (bool) {
@@ -731,17 +550,12 @@ contract BBS_Verifier {
     function reverseBytes(bytes memory input) internal pure returns (bytes memory) {
         bytes memory output = new bytes(32);
 
-        for (uint256 i = 0; i < input.length; i++) {
+        for (uint256 i = 0; i < (input.length + 1) / 2; i++) {
             output[i] = input[input.length - 1 - i];
+            output[input.length - 1 - i] = input[i];
         }
 
         return output;
-    }
-
-    function hashToG1(bytes memory _msg, bytes memory _dst) public view returns (Pairing.G1Point memory) {
-        uint256[2] memory res = Pairing.hashToPoint(_msg, _dst);
-
-        return Pairing.G1Point(res[0], res[1]);
     }
 
     function proofVerify(
@@ -786,16 +600,13 @@ contract BBS_Verifier {
         Pairing.G1Point memory bv = Pairing.plus(BBS.BP1(), bv1);
 
         for (uint256 i = 0; i < disclosedIndices.length; i++) {
-            uint8 disclosedIndex = disclosedIndices[i] + 1;
-            uint256 disclosedm = disclosedMsg[i];
-            Pairing.G1Point memory t = Pairing.scalar_mul(BBS.generators()[disclosedIndex], disclosedm);
+            Pairing.G1Point memory t = Pairing.scalar_mul(BBS.generators()[disclosedIndices[i] + 1], disclosedMsg[i]);
             bv = Pairing.plus(bv, t);
         }
         uint256 challenge = proof.challenge;
         Pairing.G1Point memory d = proof.d;
-        uint256 r3Cap = proof.r3Cap;
         Pairing.G1Point memory t21 = Pairing.scalar_mul(bv, challenge);
-        Pairing.G1Point memory t22 = Pairing.scalar_mul(d, r3Cap);
+        Pairing.G1Point memory t22 = Pairing.scalar_mul(d, proof.r3Cap);
         Pairing.G1Point memory t2 = Pairing.plus(t21, t22);
 
         for (uint256 i = 0; i < u; i++) {
@@ -830,7 +641,7 @@ contract BBS_Verifier {
         InitProof memory initProof,
         uint256[] memory disclosedMsg,
         uint8[] memory disclosedIndices
-    ) public view returns (uint256) {
+    ) public pure returns (uint256) {
         require(disclosedMsg.length == disclosedIndices.length, "invalid length");
 
         bytes memory serializeBytes = uint64ToBytes(disclosedIndices.length);
