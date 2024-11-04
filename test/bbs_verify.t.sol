@@ -170,7 +170,7 @@ contract BBS_VerifierTest is Test {
     function testProofChallengeCalculate() public {
         BBS_Verifier verifier;
         verifier = new BBS_Verifier();
-        uint256 challenge = verifier.proofChallengeCalculate(initProof, disclosed_msg, disclosed_indices);
+        uint256 challenge = verifier.calculateProofChallenge(initProof, disclosed_msg, disclosed_indices);
 
         assert(challenge == uint256(17070931957668459394149291496811547077907740596908548642717845173554837520766));
     }
@@ -178,7 +178,7 @@ contract BBS_VerifierTest is Test {
     function testProofVerify() public {
         BBS_Verifier verifier;
         verifier = new BBS_Verifier();
-        bool res = verifier.proofVerify(pk, proof, disclosed_msg, disclosed_indices);
+        bool res = verifier.verifyProof(pk, proof, disclosed_msg, disclosed_indices);
         assert(res);
     }
 }

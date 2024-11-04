@@ -558,14 +558,14 @@ contract BBS_Verifier {
         return output;
     }
 
-    function proofVerify(
+    function verifyProof(
         PublicKey memory pk,
         Proof memory proof,
         uint256[] memory disclosedMsg,
         uint8[] memory disclosedIndices
     ) public view returns (bool) {
         InitProof memory initProof = proofVerifyInit(pk, proof, disclosedMsg, disclosedIndices);
-        uint256 challenge = proofChallengeCalculate(initProof, disclosedMsg, disclosedIndices);
+        uint256 challenge = calculateProofChallenge(initProof, disclosedMsg, disclosedIndices);
 
         require(challenge == proof.challenge, "invalid challenge");
         return Pairing.pairing(
@@ -590,7 +590,8 @@ contract BBS_Verifier {
 
         uint8[] memory undisclosedIndices = complement(uint8(u), uint8(r), disclosedIndices);
         uint256 domain = calculate_domain(pk, uint64(l));
-        Pairing.G1Point memory temp1 = Pairing.plus(Pairing.scalar_mul(proof.aBar, proof.eCap), Pairing.scalar_mul(proof.d, proof.r1Cap));
+        Pairing.G1Point memory temp1 =
+            Pairing.plus(Pairing.scalar_mul(proof.aBar, proof.eCap), Pairing.scalar_mul(proof.d, proof.r1Cap));
 
         Pairing.G1Point memory t1 = Pairing.plus(Pairing.scalar_mul(proof.bBar, proof.challenge), temp1);
 
@@ -633,7 +634,7 @@ contract BBS_Verifier {
         return complementSet;
     }
 
-    function proofChallengeCalculate(
+    function calculateProofChallenge(
         InitProof memory initProof,
         uint256[] memory disclosedMsg,
         uint8[] memory disclosedIndices
