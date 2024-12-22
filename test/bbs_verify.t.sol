@@ -225,4 +225,34 @@ contract BBS_VerifierTest is Test {
         bool res = verifier.verifyProof(pk, proof, disclosed_msg, disclosed_indices);
         assert(res);
     }
+
+    function test_verify2() public {
+        BBS_Verifier verifier;
+        verifier = new BBS_Verifier();
+        BBS_Verifier.PublicKey memory pk2 = BBS_Verifier.PublicKey(
+            Pairing.G2Point(
+                [
+                    uint256(18995555010723360870807378930627885936580090638932106191711429555833420406651),
+                    uint256(12645745131803946564517015766083220615208734349162119496713913738635122768190)
+                ],
+                [
+                    uint256(3610369380377107663814668440952629069799181095497307971279336242375649233639),
+                    uint256(15886074934859455688300902859116025241719978288647494891665273100122551253775)
+                ]
+            )
+        );
+
+        BBS_Verifier.Signature memory sig2 = BBS_Verifier.Signature(
+            Pairing.G1Point(
+                uint256(3713704801856867074294728565129584267576935034681994455417684838024576978440),
+                uint256(12419719713076645181395890013321702362835444106155632949087158058409897221615)
+            ),
+            uint256(7311362562374260856004061426109311681200751001880659847665478813239839874058)
+        );
+
+        uint256[] memory msgScalar2 = new uint256[](1);
+        msgScalar2[0] = uint256(4906353686637486681420203429419541947626016402655996564089218011210122599858);
+        bool res = verifier.verifySignature(pk2, sig2, msgScalar2);
+        assert(res);
+    }
 }
