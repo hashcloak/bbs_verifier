@@ -630,7 +630,7 @@ contract BBS_Verifier {
         Pairing.G1Point memory t1 = Pairing.plus(Pairing.scalar_mul(proof.bBar, proof.challenge), temp1);
 
         Pairing.G1Point memory bv1 = Pairing.scalar_mul(BBS.generators()[0], domain);
-        Pairing.G1Point memory bv = Pairing.plus(BBS.BP1(), bv1);
+        Pairing.G1Point memory bv = Pairing.plus(BBS.P1(), bv1);
 
         for (uint256 i = 0; i < disclosedIndices.length; i++) {
             Pairing.G1Point memory t = Pairing.scalar_mul(BBS.generators()[disclosedIndices[i] + 1], disclosedMsg[i]);
@@ -675,7 +675,7 @@ contract BBS_Verifier {
     ) public pure returns (uint256) {
         require(disclosedMsg.length == disclosedIndices.length, "invalid length");
 
-        uint256 totalLength = 8 + disclosedMsg.length * (8 + 32) + initProof.points.length * 64 + 32 + 8;
+        uint256 totalLength = 8 + disclosedMsg.length * (8 + 32) + initProof.points.length * 32 + 32 + 8;
         bytes memory serializeBytes = new bytes(totalLength);
 
         uint256 serializeBytesPtr;
@@ -693,7 +693,7 @@ contract BBS_Verifier {
         // Serialize disclosedIndices and disclosedMsg
         for (uint256 i = 0; i < disclosedMsg.length; i++) {
             bytes memory indexBytes = uint64ToBytes(uint64(disclosedIndices[i]));
-            bytes memory msgBytes = reverseBytes(uintToBytes(disclosedMsg[i]));
+            bytes memory msgBytes = uintToBytes(disclosedMsg[i]);
 
             assembly {
                 let indexPtr := add(indexBytes, 0x20)
@@ -711,18 +711,18 @@ contract BBS_Verifier {
 
         // Serialize G1 points
         for (uint256 i = 0; i < initProof.points.length; i++) {
-            bytes memory pointBytes = g1ToBytes(initProof.points[i]);
+            bytes memory pointBytes = serializeCompressed(initProof.points[i]);
 
             assembly {
                 let pointPtr := add(pointBytes, 0x20)
                 mstore(serializeBytesPtr, mload(pointPtr))
                 mstore(add(serializeBytesPtr, 0x20), mload(add(pointPtr, 0x20))) // Copy 64 bytes for G1 point
-                serializeBytesPtr := add(serializeBytesPtr, 64)
+                serializeBytesPtr := add(serializeBytesPtr, 32)
             }
         }
 
         // Serialize scalar (32 bytes)
-        bytes memory scalarBytes = reverseBytes(uintToBytes(initProof.scalar));
+        bytes memory scalarBytes = uintToBytes(initProof.scalar);
         assembly {
             let scalarPtr := add(scalarBytes, 0x20)
             mstore(serializeBytesPtr, mload(scalarPtr)) // Copy 32 bytes
